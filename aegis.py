@@ -13,15 +13,15 @@ import platform
 import re
 
 
-VERSION = "2.0.0"
+VERSION = "1.0.0"
 
 BANNER = r"""
-    ___              _        _      __  ___   ____
-   /   | ___  ____ _(_)____  | |     / / /   | / __/
-  / /| |/ _ \/ __ `/ / ___/  | | /| / / / /| |/ /_
- / ___ /  __/ /_/ / (__  )   | |/ |/ / / ___ / __/
-/_/  |_\___/\__, /_/____/    |__/|__/ /_/  |_/_/
-           /____/
+ █████╗ ███████╗ ██████╗ ██╗███████╗    ██╗    ██╗ █████╗ ███████╗
+██╔══██╗██╔════╝██╔════╝ ██║██╔════╝    ██║    ██║██╔══██╗██╔════╝
+███████║█████╗  ██║  ███╗██║███████╗    ██║ █╗ ██║███████║█████╗
+██╔══██║██╔══╝  ██║   ██║██║╚════██║    ██║███╗██║██╔══██║██╔══╝
+██║  ██║███████╗╚██████╔╝██║███████║    ╚███╔███╔╝██║  ██║██║
+╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝╚══════╝     ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝
 """
 
 # ANSI Colors
@@ -46,54 +46,54 @@ ATTACK_COLORS = {
 # ───────────────────────────────────────────────────────────────────────
 
 HELP_TEXT = f"""{BANNER}
-  {B}Aegis : Reverse Proxy Web Application Firewall{X}
-  {D}Version {VERSION}{X}
+  {B}Aegis : Reverse Proxy Web Application Firewall{X}  {D}v{VERSION}{X}
 
-{B}DESCRIPTION{X}
-  Aegis is a plug-and-play WAF that protects any web application from
-  common attacks. It runs as a Docker-based reverse proxy — all traffic
-  passes through Aegis, gets scanned, and only clean requests reach
-  your backend. No changes needed in your application code.
+  Aegis is a WAF that protects any web application from common
+  attacks. It sits between users and your website as a reverse
+  proxy — scanning all traffic and blocking malicious requests.
+  No changes needed in your application code.
 
-{B}USAGE{X}
-  python aegis.py <command> [options]
+  {B}USAGE{X}
+    python aegis.py <command> [options]
 
-{B}COMMANDS{X}
-  {G}start{X}     Deploy the WAF to protect a target website
-  {G}stop{X}      Shut down all Aegis containers
-  {G}status{X}    Show the running state of containers
-  {G}logs{X}      View, monitor, or clear attack logs
+  {B}COMMANDS{X}
+    {G}start{X}     Deploy the WAF to protect a target website
+    {G}stop{X}      Shut down all Aegis containers
+    {G}status{X}    Show the running state of containers
+    {G}logs{X}      View, monitor, or clear attack logs
 
-{B}START OPTIONS{X}
-  {C}--target, -t{X}  <URL>     Target website URL {D}(required){X}
-  {C}--port, -p{X}    <PORT>    Port Aegis listens on {D}(default: 8000){X}
-  {C}--rate-limit{X}  <NUM>     Max requests per IP per minute {D}(default: 30){X}
-  {C}--detect-only{X}           Log attacks but don't block them
+  {B}START OPTIONS{X}
+    {C}--target, -t{X}  <URL>     Website to protect {D}(required){X}
+    {C}--port, -p{X}    <PORT>    Port for Aegis to listen on {D}(default: 8000){X}
+    {C}--rate-limit{X}  <NUM>     Max requests per IP/minute {D}(default: 30){X}
+    {C}--detect-only{X}           Log attacks without blocking
 
-{B}LOGS OPTIONS{X}
-  {C}--follow, -f{X}            Live monitor — watch attacks in real-time
-  {C}--clear{X}                 Clear all attack logs
+  {B}LOGS OPTIONS{X}
+    {C}--follow, -f{X}            Live monitor — watch attacks in real-time
+    {C}--clear{X}                 Clear all attack logs
 
-{B}GLOBAL OPTIONS{X}
-  {C}--help, -h{X}              Show this help menu
-  {C}--version, -v{X}           Show version number
+  {B}GLOBAL{X}
+    {C}--help, -h{X}              Show this help menu
+    {C}--version, -v{X}           Show version number
 
-{B}PROTECTION MODULES{X}
-  {R}SQLi{X}     SQL Injection          {R}CMDi{X}   OS Command Injection
-  {Y}XSS{X}      Cross-Site Scripting   {C}LFI{X}    Local File Inclusion
-  {M}SSTI{X}     Template Injection     {C}RFI{X}    Remote File Inclusion
-  {W}Rate{X}     Rate Limiting          {D}(configurable per IP){X}
+  {B}PROTECTION MODULES{X}
+    {R}SQLi{X}   SQL Injection            {R}CMDi{X}   OS Command Injection
+    {Y}XSS{X}    Cross-Site Scripting     {C}LFI{X}    Local File Inclusion
+    {M}SSTI{X}   Template Injection       {C}RFI{X}    Remote File Inclusion
+    {W}Rate{X}   Rate Limiting            {D}(configurable per IP){X}
 
-{B}EXAMPLES{X}
-  python aegis.py start --target http://localhost:3000
-  python aegis.py start -t http://mysite.com -p 9000 --rate-limit 50
-  python aegis.py start -t http://192.168.1.100:5000 --detect-only
-  python aegis.py logs --follow
-  python aegis.py logs --clear
-  python aegis.py stop
+  {B}EXAMPLES{X}
+    python aegis.py start --target http://localhost:3000
+    python aegis.py start -t http://mysite.com -p 9000 --rate-limit 50
+    python aegis.py start -t http://192.168.1.100:5000 --detect-only
+    python aegis.py logs --follow
+    python aegis.py logs --clear
+    python aegis.py stop
 
-{B}ARCHITECTURE{X}
-  Client → Nginx (Reverse Proxy) → Aegis WAF (FastAPI) → Your Backend
+  {B}HOW IT WORKS{X}
+    Your app runs on   → {D}http://localhost:3000{X}  {D}(target — your actual website){X}
+    Aegis listens on   → {G}http://localhost:8000{X}  {D}(users access this URL){X}
+    All traffic flows  → {G}User{X} → {C}Aegis WAF{X} → {D}Your App{X}
 """
 
 
@@ -168,6 +168,30 @@ def ensure_log_file():
     return log_file
 
 
+def clear_log_file(log_file):
+    """Clear the log file, handling Docker's root-owned files."""
+    try:
+        open(log_file, "w").close()
+        return True
+    except PermissionError:
+        # File was created by Docker (root). Use sudo on Linux.
+        if platform.system() == "Linux":
+            result = subprocess.run(
+                ["sudo", "truncate", "-s", "0", log_file],
+                capture_output=True
+            )
+            if result.returncode == 0:
+                return True
+            # Fallback: try docker exec
+            result = subprocess.run(
+                docker_compose_cmd() + ["exec", "python_waf", "sh", "-c", "> /app/logs/attacks.log"],
+                capture_output=True,
+                cwd=get_project_dir()
+            )
+            return result.returncode == 0
+        return False
+
+
 # ───────────────────────────────────────────────────────────────────────
 # COMMANDS
 # ───────────────────────────────────────────────────────────────────────
@@ -176,14 +200,18 @@ def cmd_start(args):
     target = validate_target(args.target)
     port = args.port
     rate = args.rate_limit
-    mode = "Detect Only" if args.detect_only else "Active Protection"
+    detect_only = args.detect_only
+    mode = "Detect Only" if detect_only else "Active Protection"
 
     print(BANNER)
+    print(f"  {B}Aegis : Reverse Proxy Web Application Firewall{X}  {D}v{VERSION}{X}")
+    print()
     print(f"  {B}Configuration{X}")
-    print(f"  ├── Target     : {C}{target}{X}")
-    print(f"  ├── Port       : {C}{port}{X}")
-    print(f"  ├── Rate Limit : {C}{rate} req/min per IP{X}")
-    print(f"  └── Mode       : {C}{mode}{X}")
+    print(f"  {D}───────────────────────────────────────────{X}")
+    print(f"  Target (your app)  {C}{target}{X}")
+    print(f"  Aegis port         {C}{port}{X}")
+    print(f"  Rate limit         {C}{rate} req/min per IP{X}")
+    print(f"  Mode               {C}{mode}{X}")
     print()
 
     ensure_docker_dns()
@@ -193,7 +221,7 @@ def cmd_start(args):
     env["AEGIS_PORT"] = str(port)
     env["AEGIS_RATE_LIMIT"] = str(rate)
     env["AEGIS_RATE_WINDOW"] = "60"
-    env["AEGIS_DETECT_ONLY"] = "true" if args.detect_only else "false"
+    env["AEGIS_DETECT_ONLY"] = "true" if detect_only else "false"
 
     print(f"  {C}[*]{X} Building and starting containers...\n")
 
@@ -209,23 +237,19 @@ def cmd_start(args):
     # Ensure log file exists for --follow to work immediately
     ensure_log_file()
 
-    w = 56
-    def pad(text, used):
-        return text + " " * max(0, w - used) + "│"
-
     print()
-    print(f"  ┌{'─' * w}┐")
-    print(f"  │  {G}Aegis WAF is running!{X}{'':>{w - 23}}│")
-    print(f"  ├{'─' * w}┤")
-    print(pad(f"  │  Protected URL : http://localhost:{port}", 39 + len(str(port))))
-    print(pad(f"  │  Proxying to   : {target}", 21 + len(target)))
-    print(pad(f"  │  Rate Limit    : {rate} req/min per IP", 35 + len(str(rate))))
-    print(pad(f"  │  Mode          : {mode}", 21 + len(mode)))
-    print(f"  ├{'─' * w}┤")
-    print(pad(f"  │  {D}python aegis.py logs            View attack logs{X}", 51))
-    print(pad(f"  │  {D}python aegis.py logs --follow   Live monitor{X}", 47))
-    print(pad(f"  │  {D}python aegis.py stop            Stop the WAF{X}", 47))
-    print(f"  └{'─' * w}┘")
+    print(f"  {G}[✓] Aegis WAF is running!{X}")
+    print(f"  {D}{'─' * 50}{X}")
+    print(f"  {B}Your app{X}       {D}{target}{X}")
+    print(f"  {B}Aegis URL{X}      {G}http://localhost:{port}{X}  ← {D}users access this{X}")
+    print(f"  {B}Rate limit{X}     {rate} req/min per IP")
+    print(f"  {B}Mode{X}           {mode}")
+    print(f"  {D}{'─' * 50}{X}")
+    print(f"  {D}Traffic flow:{X}  {G}User{X} → {C}Aegis (:{port}){X} → {D}{target}{X}")
+    print(f"  {D}{'─' * 50}{X}")
+    print(f"  {D}View logs      python aegis.py logs{X}")
+    print(f"  {D}Live monitor   python aegis.py logs --follow{X}")
+    print(f"  {D}Stop           python aegis.py stop{X}")
     print()
 
 
@@ -248,8 +272,10 @@ def cmd_logs(args):
     log_file = ensure_log_file()
 
     if args.clear:
-        open(log_file, "w").close()
-        print(f"\n  {G}[✓]{X} Attack logs cleared.\n")
+        if clear_log_file(log_file):
+            print(f"\n  {G}[✓]{X} Attack logs cleared.\n")
+        else:
+            print(f"\n  {R}[ERROR]{X} Could not clear logs. Try: sudo truncate -s 0 {log_file}\n")
         return
 
     if args.follow:
