@@ -11,9 +11,10 @@ services:
     depends_on:
       - backend
     environment:
-      # The CLI tool passes these environment variables when starting containers.
-      # The WAF app reads BACKEND_URL at runtime so we never need to edit app.py.
       - BACKEND_URL=${AEGIS_BACKEND_URL:-http://backend}
+      - RATE_LIMIT=${AEGIS_RATE_LIMIT:-30}
+      - RATE_WINDOW=${AEGIS_RATE_WINDOW:-60}
+      - DETECT_ONLY=${AEGIS_DETECT_ONLY:-false}
     volumes:
       - ./waf/logs:/app/logs
 
@@ -22,7 +23,6 @@ services:
     volumes:
       - ./proxy/nginx.conf:/etc/nginx/nginx.conf
     ports:
-      # The CLI tool passes AEGIS_PORT. Defaults to 8000 if not set.
       - "${AEGIS_PORT:-8000}:80"
     depends_on:
       - python_waf

@@ -1,14 +1,6 @@
 #!/usr/bin/env python3
 """
-Aegis WAF – Reverse Proxy Web Application Firewall
-A plug-and-play security tool that shields web applications from attacks.
-
-Usage:
-    python aegis.py start --target http://localhost:3000
-    python aegis.py stop
-    python aegis.py status
-    python aegis.py logs
-    python aegis.py logs --follow
+Aegis : Reverse Proxy Web Application Firewall
 """
 
 import argparse
@@ -21,10 +13,6 @@ import platform
 import re
 
 
-# ---------------------------------------------------------------------------
-# CONSTANTS
-# ---------------------------------------------------------------------------
-
 VERSION = "2.0.0"
 
 BANNER = r"""
@@ -36,175 +24,166 @@ BANNER = r"""
            /____/
 """
 
-INFO_BLOCK = """
-  ╔══════════════════════════════════════════════════════╗
-  ║  Aegis WAF v{version:<40s}  ║
-  ║  Reverse Proxy Web Application Firewall              ║
-  ╠══════════════════════════════════════════════════════╣
-  ║                                                      ║
-  ║  Protection Modules:                                 ║
-  ║    • SQL Injection (SQLi)                            ║
-  ║    • Cross-Site Scripting (XSS)                      ║
-  ║    • Server-Side Template Injection (SSTI)           ║
-  ║    • Local File Inclusion (LFI)                      ║
-  ║    • Remote File Inclusion (RFI)                     ║
-  ║    • OS Command Injection                            ║
-  ║    • Rate Limiting (30 req/min per IP)               ║
-  ║                                                      ║
-  ║  Architecture:                                       ║
-  ║    Client → Nginx → Python WAF → Your Backend        ║
-  ║                                                      ║
-  ╚══════════════════════════════════════════════════════╝
-"""
-
-
-# ---------------------------------------------------------------------------
-# ANSI COLORS
-# ---------------------------------------------------------------------------
-
-C_RED = "\033[91m"
-C_YELLOW = "\033[93m"
-C_CYAN = "\033[96m"
-C_GREEN = "\033[92m"
-C_MAGENTA = "\033[95m"
-C_WHITE = "\033[97m"
-C_DIM = "\033[2m"
-C_BOLD = "\033[1m"
-C_RESET = "\033[0m"
+# ANSI Colors
+R = "\033[91m"     # red
+Y = "\033[93m"     # yellow
+C = "\033[96m"     # cyan
+G = "\033[92m"     # green
+M = "\033[95m"     # magenta
+W = "\033[97m"     # white
+D = "\033[2m"      # dim
+B = "\033[1m"      # bold
+X = "\033[0m"      # reset
 
 ATTACK_COLORS = {
-    "sql injection": C_RED,
-    "xss": C_YELLOW,
-    "ssti": C_MAGENTA,
-    "lfi": C_CYAN,
-    "rfi": C_CYAN,
-    "command injection": C_RED,
-    "rate limited": C_WHITE,
+    "sql injection": R, "xss": Y, "ssti": M,
+    "lfi": C, "rfi": C, "command injection": R, "rate limited": W,
 }
 
 
-# ---------------------------------------------------------------------------
+# ───────────────────────────────────────────────────────────────────────
+# CUSTOM HELP
+# ───────────────────────────────────────────────────────────────────────
+
+HELP_TEXT = f"""{BANNER}
+  {B}Aegis : Reverse Proxy Web Application Firewall{X}
+  {D}Version {VERSION}{X}
+
+{B}DESCRIPTION{X}
+  Aegis is a plug-and-play WAF that protects any web application from
+  common attacks. It runs as a Docker-based reverse proxy — all traffic
+  passes through Aegis, gets scanned, and only clean requests reach
+  your backend. No changes needed in your application code.
+
+{B}USAGE{X}
+  python aegis.py <command> [options]
+
+{B}COMMANDS{X}
+  {G}start{X}     Deploy the WAF to protect a target website
+  {G}stop{X}      Shut down all Aegis containers
+  {G}status{X}    Show the running state of containers
+  {G}logs{X}      View, monitor, or clear attack logs
+
+{B}START OPTIONS{X}
+  {C}--target, -t{X}  <URL>     Target website URL {D}(required){X}
+  {C}--port, -p{X}    <PORT>    Port Aegis listens on {D}(default: 8000){X}
+  {C}--rate-limit{X}  <NUM>     Max requests per IP per minute {D}(default: 30){X}
+  {C}--detect-only{X}           Log attacks but don't block them
+
+{B}LOGS OPTIONS{X}
+  {C}--follow, -f{X}            Live monitor — watch attacks in real-time
+  {C}--clear{X}                 Clear all attack logs
+
+{B}GLOBAL OPTIONS{X}
+  {C}--help, -h{X}              Show this help menu
+  {C}--version, -v{X}           Show version number
+
+{B}PROTECTION MODULES{X}
+  {R}SQLi{X}     SQL Injection          {R}CMDi{X}   OS Command Injection
+  {Y}XSS{X}      Cross-Site Scripting   {C}LFI{X}    Local File Inclusion
+  {M}SSTI{X}     Template Injection     {C}RFI{X}    Remote File Inclusion
+  {W}Rate{X}     Rate Limiting          {D}(configurable per IP){X}
+
+{B}EXAMPLES{X}
+  python aegis.py start --target http://localhost:3000
+  python aegis.py start -t http://mysite.com -p 9000 --rate-limit 50
+  python aegis.py start -t http://192.168.1.100:5000 --detect-only
+  python aegis.py logs --follow
+  python aegis.py logs --clear
+  python aegis.py stop
+
+{B}ARCHITECTURE{X}
+  Client → Nginx (Reverse Proxy) → Aegis WAF (FastAPI) → Your Backend
+"""
+
+
+# ───────────────────────────────────────────────────────────────────────
 # HELPERS
-# ---------------------------------------------------------------------------
-
-def print_banner():
-    """Print the Aegis banner and info block."""
-    print(BANNER)
-    print(INFO_BLOCK.format(version=VERSION))
-
+# ───────────────────────────────────────────────────────────────────────
 
 def get_project_dir():
-    """Return the directory where aegis.py lives (project root)."""
     return os.path.dirname(os.path.abspath(__file__))
 
 
 def docker_compose_cmd():
-    """Return the correct docker compose command for this system."""
     try:
-        subprocess.run(
-            ["docker", "compose", "version"],
-            capture_output=True, check=True
-        )
+        subprocess.run(["docker", "compose", "version"],
+                       capture_output=True, check=True)
         return ["docker", "compose"]
     except (subprocess.CalledProcessError, FileNotFoundError):
         return ["docker-compose"]
 
 
-def is_running():
-    """Check if Aegis containers are currently running."""
-    try:
-        result = subprocess.run(
-            docker_compose_cmd() + ["ps", "--format", "json"],
-            capture_output=True, text=True,
-            cwd=get_project_dir()
-        )
-        return result.returncode == 0 and result.stdout.strip() != ""
-    except FileNotFoundError:
-        return False
-
-
 def validate_target(target):
-    """Validate and normalize the target URL."""
     if not target:
-        print(f"  {C_RED}[ERROR]{C_RESET} --target is required.")
-        print(f"         Example: python aegis.py start --target http://localhost:3000")
+        print(f"  {R}[ERROR]{X} --target is required.")
+        print(f"         Example: python aegis.py start -t http://localhost:3000")
         sys.exit(1)
-
     if not target.startswith("http://") and not target.startswith("https://"):
         target = "http://" + target
-
     return target
 
 
 def ensure_docker_dns():
-    """Ensure Docker has proper DNS configuration on Linux.
-
-    On Kali and Ubuntu, Docker containers often can't resolve hostnames
-    because the host DNS points to 127.0.0.53 (systemd-resolved stub).
-    This auto-configures Google DNS (8.8.8.8) to fix the issue.
-    Only runs on Linux — Docker Desktop handles DNS natively.
-    """
+    """Auto-configure Docker DNS on Linux to prevent build failures."""
     if platform.system() != "Linux":
         return
-
     daemon_json = "/etc/docker/daemon.json"
-    dns_servers = ["8.8.8.8", "8.8.4.4"]
-
     try:
         if os.path.exists(daemon_json):
             with open(daemon_json, "r") as f:
-                config = json.load(f)
-                if "dns" in config:
+                if "dns" in json.load(f):
                     return
     except (json.JSONDecodeError, PermissionError):
         pass
 
-    print(f"  {C_CYAN}[*]{C_RESET} Configuring Docker DNS (first-time setup)...")
-    print(f"      This prevents 'name resolution' errors in containers.\n")
-
+    print(f"  {C}[*]{X} Configuring Docker DNS (first-time setup)...")
     try:
+        config = {}
         if os.path.exists(daemon_json):
             with open(daemon_json, "r") as f:
                 config = json.load(f)
-        else:
-            config = {}
     except (json.JSONDecodeError, PermissionError):
         config = {}
 
-    config["dns"] = dns_servers
-    config_str = json.dumps(config, indent=2)
-
+    config["dns"] = ["8.8.8.8", "8.8.4.4"]
     subprocess.run(["sudo", "mkdir", "-p", "/etc/docker"], capture_output=True)
-    result = subprocess.run(
-        ["sudo", "tee", daemon_json],
-        input=config_str.encode(), capture_output=True
-    )
-
+    result = subprocess.run(["sudo", "tee", daemon_json],
+                            input=json.dumps(config, indent=2).encode(),
+                            capture_output=True)
     if result.returncode != 0:
-        print(f"  {C_YELLOW}[WARNING]{C_RESET} Could not configure Docker DNS automatically.")
-        print(f'           Run: sudo bash -c \'echo \'{{"dns":["8.8.8.8"]}}\' > /etc/docker/daemon.json\'')
+        print(f"  {Y}[!]{X} Could not auto-configure DNS. See README for manual fix.")
         return
-
     subprocess.run(["sudo", "systemctl", "restart", "docker"], capture_output=True)
-    print(f"  {C_GREEN}[✓]{C_RESET} Docker DNS configured successfully.\n")
+    print(f"  {G}[✓]{X} Docker DNS configured.\n")
 
 
-# ---------------------------------------------------------------------------
+def ensure_log_file():
+    """Create the log file and directory if they don't exist."""
+    log_dir = os.path.join(get_project_dir(), "waf", "logs")
+    log_file = os.path.join(log_dir, "attacks.log")
+    os.makedirs(log_dir, exist_ok=True)
+    if not os.path.exists(log_file):
+        open(log_file, "w").close()
+    return log_file
+
+
+# ───────────────────────────────────────────────────────────────────────
 # COMMANDS
-# ---------------------------------------------------------------------------
+# ───────────────────────────────────────────────────────────────────────
 
 def cmd_start(args):
-    """Start the Aegis WAF in front of a target website."""
-    print(BANNER)
-
     target = validate_target(args.target)
     port = args.port
+    rate = args.rate_limit
+    mode = "Detect Only" if args.detect_only else "Active Protection"
 
-    print(f"  {C_BOLD}Configuration:{C_RESET}")
-    print(f"  ├─ Target    : {C_CYAN}{target}{C_RESET}")
-    print(f"  ├─ Port      : {C_CYAN}{port}{C_RESET}")
-    print(f"  ├─ Rate Limit: {C_CYAN}30 requests/minute per IP{C_RESET}")
-    print(f"  └─ Mode      : {C_CYAN}{'Detect Only' if args.detect_only else 'Active Protection'}{C_RESET}")
+    print(BANNER)
+    print(f"  {B}Configuration{X}")
+    print(f"  ├── Target     : {C}{target}{X}")
+    print(f"  ├── Port       : {C}{port}{X}")
+    print(f"  ├── Rate Limit : {C}{rate} req/min per IP{X}")
+    print(f"  └── Mode       : {C}{mode}{X}")
     print()
 
     ensure_docker_dns()
@@ -212,81 +191,65 @@ def cmd_start(args):
     env = os.environ.copy()
     env["AEGIS_BACKEND_URL"] = target
     env["AEGIS_PORT"] = str(port)
+    env["AEGIS_RATE_LIMIT"] = str(rate)
+    env["AEGIS_RATE_WINDOW"] = "60"
+    env["AEGIS_DETECT_ONLY"] = "true" if args.detect_only else "false"
 
-    print(f"  {C_CYAN}[*]{C_RESET} Building and starting containers...")
-    print()
+    print(f"  {C}[*]{X} Building and starting containers...\n")
 
     result = subprocess.run(
         docker_compose_cmd() + ["up", "--build", "-d"],
-        cwd=get_project_dir(),
-        env=env
+        cwd=get_project_dir(), env=env
     )
 
     if result.returncode != 0:
-        print(f"\n  {C_RED}[ERROR]{C_RESET} Failed to start Aegis. Is Docker running?")
+        print(f"\n  {R}[ERROR]{X} Failed to start. Is Docker running?")
         sys.exit(1)
 
+    # Ensure log file exists for --follow to work immediately
+    ensure_log_file()
+
+    w = 56
+    def pad(text, used):
+        return text + " " * max(0, w - used) + "│"
+
     print()
-    print(f"  {C_GREEN}╔══════════════════════════════════════════════════════╗{C_RESET}")
-    print(f"  {C_GREEN}║{C_RESET}  {C_BOLD}Aegis WAF is running!{C_RESET}                                {C_GREEN}║{C_RESET}")
-    print(f"  {C_GREEN}╠══════════════════════════════════════════════════════╣{C_RESET}")
-    print(f"  {C_GREEN}║{C_RESET}  Protected URL : {C_BOLD}http://localhost:{port}{C_RESET}")
-    print(f"  {C_GREEN}║{C_RESET}  Proxying to   : {target}")
-    print(f"  {C_GREEN}║{C_RESET}  Rate limit    : 30 requests/minute per IP")
-    print(f"  {C_GREEN}╠══════════════════════════════════════════════════════╣{C_RESET}")
-    print(f"  {C_GREEN}║{C_RESET}  {C_DIM}View logs  : python aegis.py logs{C_RESET}")
-    print(f"  {C_GREEN}║{C_RESET}  {C_DIM}Live monitor: python aegis.py logs --follow{C_RESET}")
-    print(f"  {C_GREEN}║{C_RESET}  {C_DIM}Stop       : python aegis.py stop{C_RESET}")
-    print(f"  {C_GREEN}╚══════════════════════════════════════════════════════╝{C_RESET}")
+    print(f"  ┌{'─' * w}┐")
+    print(f"  │  {G}Aegis WAF is running!{X}{'':>{w - 23}}│")
+    print(f"  ├{'─' * w}┤")
+    print(pad(f"  │  Protected URL : http://localhost:{port}", 39 + len(str(port))))
+    print(pad(f"  │  Proxying to   : {target}", 21 + len(target)))
+    print(pad(f"  │  Rate Limit    : {rate} req/min per IP", 35 + len(str(rate))))
+    print(pad(f"  │  Mode          : {mode}", 21 + len(mode)))
+    print(f"  ├{'─' * w}┤")
+    print(pad(f"  │  {D}python aegis.py logs            View attack logs{X}", 51))
+    print(pad(f"  │  {D}python aegis.py logs --follow   Live monitor{X}", 47))
+    print(pad(f"  │  {D}python aegis.py stop            Stop the WAF{X}", 47))
+    print(f"  └{'─' * w}┘")
     print()
 
 
 def cmd_stop(args):
-    """Stop the Aegis WAF."""
-    print(f"\n  {C_CYAN}[*]{C_RESET} Stopping Aegis WAF...\n")
-
-    result = subprocess.run(
-        docker_compose_cmd() + ["down"],
-        cwd=get_project_dir()
-    )
-
+    print(f"\n  {C}[*]{X} Stopping Aegis WAF...\n")
+    result = subprocess.run(docker_compose_cmd() + ["down"], cwd=get_project_dir())
     if result.returncode == 0:
-        print(f"\n  {C_GREEN}[✓]{C_RESET} Aegis WAF stopped successfully.\n")
+        print(f"\n  {G}[✓]{X} Aegis WAF stopped.\n")
     else:
-        print(f"\n  {C_RED}[ERROR]{C_RESET} Failed to stop. Are the containers running?\n")
+        print(f"\n  {R}[ERROR]{X} Failed to stop.\n")
 
 
 def cmd_status(args):
-    """Show the current status of Aegis containers."""
-    print(f"\n  {C_BOLD}Aegis WAF — Container Status{C_RESET}\n")
-
-    subprocess.run(
-        docker_compose_cmd() + ["ps"],
-        cwd=get_project_dir()
-    )
+    print(f"\n  {B}Aegis WAF — Container Status{X}\n")
+    subprocess.run(docker_compose_cmd() + ["ps"], cwd=get_project_dir())
     print()
 
 
 def cmd_logs(args):
-    """View the attack logs from the WAF."""
-    log_file = os.path.join(get_project_dir(), "waf", "logs", "attacks.log")
+    log_file = ensure_log_file()
 
     if args.clear:
-        if os.path.exists(log_file):
-            open(log_file, "w").close()
-            print(f"  {C_GREEN}[✓]{C_RESET} Attack logs cleared.\n")
-        else:
-            print(f"  {C_DIM}[*] No log file to clear.{C_RESET}\n")
-        return
-
-    if not os.path.exists(log_file):
-        print()
-        print(f"  {C_BOLD}No attack logs found yet.{C_RESET}")
-        print(f"  {C_DIM}Logs are created when the first attack is detected.{C_RESET}")
-        print()
-        print(f"  {C_DIM}Try sending a test attack:{C_RESET}")
-        print(f'  curl "http://localhost:8000/?q=<script>alert(1)</script>"')
-        print()
+        open(log_file, "w").close()
+        print(f"\n  {G}[✓]{X} Attack logs cleared.\n")
         return
 
     if args.follow:
@@ -295,16 +258,11 @@ def cmd_logs(args):
         _logs_show(log_file)
 
 
-# ---------------------------------------------------------------------------
-# LOG DISPLAY ENGINE
-# ---------------------------------------------------------------------------
+# ───────────────────────────────────────────────────────────────────────
+# LOG DISPLAY
+# ───────────────────────────────────────────────────────────────────────
 
 def _parse_log_line(line):
-    """Parse a raw log line into structured fields.
-
-    Input:  [2026-04-01 11:25:26.123456] IP: 1.2.3.4 | Attack: ['XSS'] | Payload: ...
-    Output: { timestamp, ip, attack, payload } or None
-    """
     match = re.match(
         r"\[(.+?)\]\s*IP:\s*(.+?)\s*\|\s*Attack:\s*(.+?)\s*\|\s*Payload:\s*(.*)",
         line.strip()
@@ -312,25 +270,17 @@ def _parse_log_line(line):
     if not match:
         return None
 
-    timestamp_raw = match.group(1).strip()
+    ts_raw = match.group(1).strip()
     ip = match.group(2).strip()
-    attack_raw = match.group(3).strip()
+    attack = match.group(3).strip().strip("[]'\"").replace("'", "").replace('"', "")
     payload = match.group(4).strip()
 
-    # Clean attack type: "['SQL Injection']" → "SQL Injection"
-    attack = attack_raw.strip("[]'\"").replace("'", "").replace('"', "")
-
-    # Shorten timestamp: "2026-04-01 11:25:26.123456" → "04-01 11:25:26"
     try:
-        ts = timestamp_raw.split(".")[0]
+        ts = ts_raw.split(".")[0]
         parts = ts.split(" ")
-        if len(parts) == 2:
-            date_part = "-".join(parts[0].split("-")[1:])
-            timestamp = f"{date_part} {parts[1]}"
-        else:
-            timestamp = ts
+        timestamp = f"{'-'.join(parts[0].split('-')[1:])} {parts[1]}" if len(parts) == 2 else ts
     except Exception:
-        timestamp = timestamp_raw
+        timestamp = ts_raw
 
     if len(payload) > 80:
         payload = payload[:77] + "..."
@@ -339,246 +289,136 @@ def _parse_log_line(line):
 
 
 def _color_attack(text):
-    """Wrap attack type text in its ANSI color."""
     key = text.lower().strip()
     for name, color in ATTACK_COLORS.items():
         if name in key:
-            return f"{color}{text}{C_RESET}"
+            return f"{color}{text}{X}"
     return text
 
 
-def _print_log_entry(entry):
-    """Print one formatted log line."""
-    colored = _color_attack(entry["attack"])
-    print(
-        f"  {C_DIM}{entry['timestamp']}{C_RESET}"
-        f"  {C_BOLD}{entry['ip']:>15}{C_RESET}"
-        f"  {colored:<30}"
-        f"  {C_DIM}{entry['payload']}{C_RESET}"
-    )
+def _print_entry(e):
+    print(f"  {D}{e['timestamp']}{X}  {B}{e['ip']:>15}{X}  {_color_attack(e['attack']):<30}  {D}{e['payload']}{X}")
 
 
 def _print_header():
-    """Print column headers for log table."""
-    print(
-        f"  {C_DIM}{'TIME':<14}"
-        f"  {'IP':>15}"
-        f"  {'ATTACK':<30}"
-        f"  {'PAYLOAD'}{C_RESET}"
-    )
-    print(f"  {C_DIM}{'─' * 90}{C_RESET}")
+    print(f"  {D}{'TIME':<14}  {'IP':>15}  {'ATTACK':<30}  {'PAYLOAD'}{X}")
+    print(f"  {D}{'─' * 85}{X}")
 
 
 def _logs_show(log_file):
-    """Display existing logs with summary statistics."""
     with open(log_file, "r") as f:
         lines = f.readlines()
 
-    if not lines:
-        print(f"  {C_DIM}[*] Log file is empty — no attacks detected yet.{C_RESET}\n")
-        return
-
-    entries = [_parse_log_line(l) for l in lines]
+    entries = [_parse_log_line(l) for l in lines if l.strip()]
     entries = [e for e in entries if e]
 
     if not entries:
-        print(f"  {C_DIM}[*] Log file exists but no entries could be parsed.{C_RESET}\n")
+        print(f"\n  {D}No attacks detected yet.{X}")
+        print(f"  {D}Try:{X} curl \"http://localhost:8000/?q=<script>alert(1)</script>\"\n")
         return
 
-    # Summary stats
+    # Summary
     unique_ips = set(e["ip"] for e in entries)
-    attack_counts = {}
+    counts = {}
     for e in entries:
-        attack_counts[e["attack"]] = attack_counts.get(e["attack"], 0) + 1
-    top_attack = max(attack_counts, key=attack_counts.get)
+        counts[e["attack"]] = counts.get(e["attack"], 0) + 1
+    top = max(counts, key=counts.get)
 
     print()
-    print(f"  {C_BOLD}Aegis WAF — Attack Log{C_RESET}")
-    print(f"  {C_DIM}{'─' * 40}{C_RESET}")
-    print(f"  Total attacks  : {C_BOLD}{len(entries)}{C_RESET}")
-    print(f"  Unique IPs     : {C_BOLD}{len(unique_ips)}{C_RESET}")
-    print(f"  Top attack     : {_color_attack(top_attack)} ({attack_counts[top_attack]})")
+    print(f"  {B}Aegis WAF — Attack Log{X}")
+    print(f"  {D}{'─' * 40}{X}")
+    print(f"  Total Attacks  : {B}{len(entries)}{X}")
+    print(f"  Unique IPs     : {B}{len(unique_ips)}{X}")
+    print(f"  Top Attack     : {_color_attack(top)} ({counts[top]})")
 
-    # Attack type breakdown
-    print(f"\n  {C_DIM}Attack Breakdown:{C_RESET}")
-    for attack, count in sorted(attack_counts.items(), key=lambda x: -x[1]):
-        bar = "█" * min(count, 30)
-        print(f"    {_color_attack(attack):<35} {C_DIM}{bar} {count}{C_RESET}")
+    # Breakdown
+    print(f"\n  {D}Attack Breakdown:{X}")
+    for attack, count in sorted(counts.items(), key=lambda x: -x[1]):
+        print(f"    {_color_attack(attack):<35} {count}")
 
     print()
 
-    # Show entries (last 50 if too many)
     display = entries[-50:] if len(entries) > 50 else entries
     if len(entries) > 50:
-        print(f"  {C_DIM}(showing last 50 of {len(entries)} entries){C_RESET}\n")
+        print(f"  {D}(showing last 50 of {len(entries)} entries){X}\n")
 
     _print_header()
-    for entry in display:
-        _print_log_entry(entry)
+    for e in display:
+        _print_entry(e)
     print()
 
 
 def _logs_follow(log_file):
-    """Real-time log monitor — shows new attacks as they happen."""
     print()
-    print(f"  {C_BOLD}Aegis WAF — Live Attack Monitor{C_RESET}")
-    print(f"  {C_DIM}Watching for new attacks... (CTRL+C to stop){C_RESET}")
+    print(f"  {B}Aegis WAF — Live Attack Monitor{X}")
+    print(f"  {D}Watching for new attacks... (CTRL+C to stop){X}")
     print()
     _print_header()
 
     count = 0
     try:
         with open(log_file, "r") as f:
-            f.seek(0, 2)  # Jump to end — only show NEW entries
+            f.seek(0, 2)
             while True:
                 line = f.readline()
                 if line:
-                    entry = _parse_log_line(line)
-                    if entry:
+                    e = _parse_log_line(line)
+                    if e:
                         count += 1
-                        _print_log_entry(entry)
+                        _print_entry(e)
                 else:
                     time.sleep(0.3)
     except KeyboardInterrupt:
-        print()
-        print(f"  {C_DIM}{'─' * 90}{C_RESET}")
-        print(f"  {C_BOLD}{count}{C_RESET} new attacks captured during this session.")
-        print()
+        print(f"\n  {D}{'─' * 85}{X}")
+        print(f"  {B}{count}{X} attacks captured during this session.\n")
 
 
-# ---------------------------------------------------------------------------
+# ───────────────────────────────────────────────────────────────────────
 # ARGUMENT PARSER
-# ---------------------------------------------------------------------------
-
-HELP_EPILOG = f"""
-{C_BOLD}Commands:{C_RESET}
-  start       Deploy the WAF in front of a target website
-  stop        Shut down all Aegis containers
-  status      Show the running state of Aegis containers
-  logs        View, monitor, or clear the attack logs
-
-{C_BOLD}Quick Start:{C_RESET}
-  python aegis.py start --target http://localhost:3000
-  python aegis.py start --target http://mysite.com --port 9000
-  python aegis.py logs --follow
-  python aegis.py stop
-
-{C_BOLD}Protection Modules:{C_RESET}
-  SQLi         SQL Injection detection
-  XSS          Cross-Site Scripting detection
-  SSTI         Server-Side Template Injection detection
-  LFI          Local File Inclusion detection
-  RFI          Remote File Inclusion detection
-  CMDi         OS Command Injection detection
-  Rate Limit   30 requests/minute per IP (auto-block)
-
-{C_BOLD}Architecture:{C_RESET}
-  Client → Nginx (Reverse Proxy) → Python WAF (FastAPI) → Your Backend
-"""
-
+# ───────────────────────────────────────────────────────────────────────
 
 def build_parser():
-    """Build the CLI argument parser."""
-
     parser = argparse.ArgumentParser(
         prog="aegis",
-        description="Aegis WAF – Reverse Proxy Web Application Firewall",
-        epilog=HELP_EPILOG,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=False,
     )
-    parser.add_argument(
-        "-v", "--version",
-        action="version",
-        version=f"Aegis WAF v{VERSION}",
-    )
+    parser.add_argument("-h", "--help", action="store_true")
+    parser.add_argument("-v", "--version", action="store_true")
 
-    subparsers = parser.add_subparsers(
-        dest="command",
-        title="commands",
-    )
+    sub = parser.add_subparsers(dest="command")
 
-    # --- start ---
-    sp_start = subparsers.add_parser(
-        "start",
-        help="Start the WAF to protect a target website",
-        description="Deploy Aegis WAF as a reverse proxy in front of a target website.\n\n"
-                    "Aegis builds and starts Docker containers that intercept all traffic,\n"
-                    "scan for attacks, enforce rate limits, and forward clean requests.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Examples:\n"
-               "  python aegis.py start --target http://localhost:3000\n"
-               "  python aegis.py start -t http://mysite.com -p 9000\n"
-               "  python aegis.py start -t 192.168.1.100:5000\n"
-               "  python aegis.py start -t http://backend --detect-only\n",
-    )
-    sp_start.add_argument(
-        "--target", "-t", required=True, metavar="URL",
-        help="URL of the website to protect (e.g. http://localhost:3000)",
-    )
-    sp_start.add_argument(
-        "--port", "-p", default=8000, type=int, metavar="PORT",
-        help="Port for Aegis to listen on (default: 8000)",
-    )
-    sp_start.add_argument(
-        "--detect-only", action="store_true",
-        help="Log attacks but don't block them (monitor mode)",
-    )
-    sp_start.set_defaults(func=cmd_start)
+    sp = sub.add_parser("start", add_help=False)
+    sp.add_argument("--target", "-t", required=True, metavar="URL")
+    sp.add_argument("--port", "-p", default=8000, type=int, metavar="PORT")
+    sp.add_argument("--rate-limit", "-r", default=30, type=int, metavar="NUM")
+    sp.add_argument("--detect-only", action="store_true")
+    sp.set_defaults(func=cmd_start)
 
-    # --- stop ---
-    sp_stop = subparsers.add_parser(
-        "stop",
-        help="Stop the running WAF and remove containers",
-        description="Shut down all Aegis WAF containers and clean up Docker resources.",
-    )
-    sp_stop.set_defaults(func=cmd_stop)
+    sub.add_parser("stop", add_help=False).set_defaults(func=cmd_stop)
+    sub.add_parser("status", add_help=False).set_defaults(func=cmd_status)
 
-    # --- status ---
-    sp_status = subparsers.add_parser(
-        "status",
-        help="Show the running state of Aegis containers",
-        description="Display the current status of all Aegis Docker containers\n"
-                    "(proxy, WAF engine, and backend).",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    sp_status.set_defaults(func=cmd_status)
-
-    # --- logs ---
-    sp_logs = subparsers.add_parser(
-        "logs",
-        help="View, monitor, or clear the attack logs",
-        description="Display attack logs with color-coded formatting, summary statistics,\n"
-                    "and real-time monitoring capabilities.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Examples:\n"
-               "  python aegis.py logs              # View all logged attacks\n"
-               "  python aegis.py logs --follow      # Live monitor (real-time)\n"
-               "  python aegis.py logs --clear       # Clear all logs\n",
-    )
-    sp_logs.add_argument(
-        "--follow", "-f", action="store_true",
-        help="Live monitor — watch for new attacks in real-time",
-    )
-    sp_logs.add_argument(
-        "--clear", action="store_true",
-        help="Clear all attack logs and start fresh",
-    )
-    sp_logs.set_defaults(func=cmd_logs)
+    lp = sub.add_parser("logs", add_help=False)
+    lp.add_argument("--follow", "-f", action="store_true")
+    lp.add_argument("--clear", action="store_true")
+    lp.set_defaults(func=cmd_logs)
 
     return parser
 
 
-# ---------------------------------------------------------------------------
+# ───────────────────────────────────────────────────────────────────────
 # MAIN
-# ---------------------------------------------------------------------------
+# ───────────────────────────────────────────────────────────────────────
 
 def main():
     parser = build_parser()
     args = parser.parse_args()
 
-    if not args.command:
-        print_banner()
-        parser.print_help()
+    if args.version:
+        print(f"Aegis WAF v{VERSION}")
+        sys.exit(0)
+
+    if args.help or not args.command:
+        print(HELP_TEXT)
         sys.exit(0)
 
     args.func(args)
