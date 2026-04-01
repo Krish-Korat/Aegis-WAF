@@ -33,15 +33,21 @@ def normalize_input(text):
 
 # COMMAND INJECTION PATTERNS
 
-# command separators
+# Command separators: only match when they look like shell chaining,
+# not normal URL parameters. Require whitespace or dangerous command nearby.
 command_separators = re.compile(
-    r"(;|\|\||&&|\||&)"
+    r"""
+    (?:^|[\s=])         # preceded by start, whitespace, or =
+    (;|\|\||\&\&)       # semicolon, ||, or && (NOT single | or & which appear in URLs)
+    (?:[\s]|$)          # followed by whitespace or end
+    """,
+    re.VERBOSE
 )
 
 # command substitution
 command_substitution = re.compile(
     r"""
-    (`[^`]+`) |           # backticks
+    (`[^`]+`) |           # backticks with content
     (\$\([^)]+\))         # $(...)
     """,
     re.VERBOSE
@@ -50,7 +56,7 @@ command_substitution = re.compile(
 # shell variable expansion / bypass tricks
 shell_expansion = re.compile(
     r"""
-    \$@ |                 # $@
+    \$@\s*\w |            # $@ followed by word char
     \$\{?ifs\}? |         # $IFS or ${IFS}
     \$\([^)]+\) |         # $(...)
     `[^`]+`               # backticks
@@ -58,27 +64,26 @@ shell_expansion = re.compile(
     re.VERBOSE
 )
 
-# common dangerous commands
+# common dangerous commands — require word boundaries and minimum context
 dangerous_commands = re.compile(
     r"""
     \b(
-        cat|
-        ls|
-        id|
+        cat\s+|
         whoami|
-        uname|
-        pwd|
-        sleep|
-        ping|
-        bash|
-        sh|
-        nc|
-        curl|
-        wget|
+        uname\s|
+        pwd\b|
+        sleep\s+\d|
+        ping\s|
+        bash\b|
+        \/bin\/sh|
+        \bnc\s+-|
+        netcat\s|
+        curl\s|
+        wget\s|
         powershell|
-        cmd|
-        netcat
-    )\b
+        cmd\s*\.exe|
+        cmd\s+\/c
+    )
     """,
     re.VERBOSE
 )
@@ -86,11 +91,10 @@ dangerous_commands = re.compile(
 # detect obfuscated commands like who$@ami
 obfuscated_commands = re.compile(
     r"""
-    w\s*ho[\$\@\{\(\)]*\s*am\s*i |
-    c\s*at |
-    l\s*s |
-    w\s*get |
-    c\s*url
+    w\s*ho[\$\@\{\(\)]+\s*am\s*i |
+    c\s*a\s*t\s+\/     |
+    w\s*g\s*e\s*t\s+   |
+    c\s*u\s*r\s*l\s+
     """,
     re.VERBOSE
 )
@@ -107,9 +111,13 @@ sensitive_files = re.compile(
     re.VERBOSE
 )
 
-# input/output redirection
+# input/output redirection (require context — not bare < > in HTML)
 redirection = re.compile(
-    r"(>|<)"
+    r"""
+    \b\w+\s*>>?\s*[/\w] |    # command > file  or  command >> file
+    \b\w+\s*<\s*[/\w]         # command < file
+    """,
+    re.VERBOSE
 )
 
 # hex encoded payloads
@@ -124,11 +132,11 @@ def detect_cmd_injection(payload):
 
     normalized = normalize_input(payload)
 
-    # direct command substitution
+    # direct command substitution — always suspicious
     if command_substitution.search(normalized):
         return True
 
-    # command chaining
+    # command chaining with separator
     if command_separators.search(normalized):
 
         if dangerous_commands.search(normalized):
@@ -165,27 +173,3 @@ def detect_cmd_injection(payload):
             return True
 
     return False
-
-
-'''
-# TEST
-
-tests = [
-
-    "8.8.8.8;cat /etc/passwd",
-    "8.8.8.8 && whoami",
-    "`cat /etc/passwd`",
-    "$(whoami)",
-    "cat${IFS}/etc/passwd",
-    ";who$@ami",
-    ";who${IFS}ami",
-    "who$(echo am)i",
-
-    "hello world",
-    "normal input",
-]
-
-for t in tests:
-    print(f"{t} -> {detect_cmd_injection(t)}")
-    
-'''
