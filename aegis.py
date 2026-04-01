@@ -235,34 +235,211 @@ def cmd_status(args):
 
 
 def cmd_logs(args):
-    """View the attack logs from the WAF."""
+    """View the attack logs from the WAF with clean formatting."""
     log_file = os.path.join(get_project_dir(), "waf", "logs", "attacks.log")
 
+    if args.clear:
+        # Clear the log file
+        if os.path.exists(log_file):
+            open(log_file, "w").close()
+            print("[✓] Attack logs cleared.")
+        else:
+            print("[*] No log file to clear.")
+        return
+
     if not os.path.exists(log_file):
-        print("[*] No attack logs found yet. The log file is created when the first attack is detected.")
+        print("[*] No attack logs found yet.")
+        print("    Logs are created when the first attack is detected.")
+        print("    Try sending a test payload:")
+        print('    curl "http://localhost:8000/?q=<script>alert(1)</script>"')
         return
 
     if args.follow:
-        print("[*] Tailing attack logs (press CTRL+C to stop)...\n")
-        try:
-            with open(log_file, "r") as f:
-                f.seek(0, 2)
-                while True:
-                    line = f.readline()
-                    if line:
-                        print(line, end="")
-                    else:
-                        time.sleep(0.5)
-        except KeyboardInterrupt:
-            print("\n[*] Stopped tailing.")
+        _logs_follow(log_file)
     else:
-        print("[*] Attack Log:\n")
+        _logs_show(log_file)
+
+
+def _parse_log_line(line):
+    """Parse a raw log line into structured fields.
+
+    Input format:
+      [2026-04-01 11:25:26.123456] IP: 1.2.3.4 | Attack: ['XSS'] | Payload: ...
+
+    Returns a dict with keys: timestamp, ip, attack, payload
+    or None if the line can't be parsed.
+    """
+    import re
+    match = re.match(
+        r"\[(.+?)\]\s*IP:\s*(.+?)\s*\|\s*Attack:\s*(.+?)\s*\|\s*Payload:\s*(.*)",
+        line.strip()
+    )
+    if not match:
+        return None
+
+    timestamp_raw = match.group(1).strip()
+    ip = match.group(2).strip()
+    attack_raw = match.group(3).strip()
+    payload = match.group(4).strip()
+
+    # Clean up attack type: "['SQL Injection', 'XSS']" → "SQL Injection, XSS"
+    attack = attack_raw.strip("[]'\"")
+    attack = attack.replace("'", "").replace('"', "")
+
+    # Shorten timestamp: "2026-04-01 11:25:26.123456" → "04-01 11:25:26"
+    try:
+        parts = timestamp_raw.split(".")
+        ts = parts[0]  # drop microseconds
+        date_time = ts.split(" ")
+        if len(date_time) == 2:
+            date_part = "-".join(date_time[0].split("-")[1:])  # "04-01"
+            timestamp = f"{date_part} {date_time[1]}"
+        else:
+            timestamp = ts
+    except Exception:
+        timestamp = timestamp_raw
+
+    # Truncate long payloads
+    if len(payload) > 80:
+        payload = payload[:77] + "..."
+
+    return {
+        "timestamp": timestamp,
+        "ip": ip,
+        "attack": attack,
+        "payload": payload,
+    }
+
+
+# --- ANSI color codes for terminal output ---
+# These make different attack types visually distinct in the terminal.
+C_RED = "\033[91m"
+C_YELLOW = "\033[93m"
+C_CYAN = "\033[96m"
+C_GREEN = "\033[92m"
+C_MAGENTA = "\033[95m"
+C_WHITE = "\033[97m"
+C_DIM = "\033[2m"
+C_BOLD = "\033[1m"
+C_RESET = "\033[0m"
+
+ATTACK_COLORS = {
+    "sql injection": C_RED,
+    "xss": C_YELLOW,
+    "ssti": C_MAGENTA,
+    "lfi": C_CYAN,
+    "rfi": C_CYAN,
+    "command injection": C_RED,
+    "rate limited": C_WHITE,
+}
+
+
+def _color_attack(attack_text):
+    """Return the attack text wrapped in its color code."""
+    key = attack_text.lower().strip()
+    for name, color in ATTACK_COLORS.items():
+        if name in key:
+            return f"{color}{attack_text}{C_RESET}"
+    return attack_text
+
+
+def _print_log_entry(entry):
+    """Print a single parsed log entry as a clean formatted line."""
+    colored_attack = _color_attack(entry['attack'])
+    print(
+        f"  {C_DIM}{entry['timestamp']}{C_RESET}"
+        f"  {C_BOLD}{entry['ip']:>15}{C_RESET}"
+        f"  {colored_attack:<30}"
+        f"  {C_DIM}{entry['payload']}{C_RESET}"
+    )
+
+
+def _print_header():
+    """Print the column header for log output."""
+    print(
+        f"  {C_DIM}{'TIME':<14}"
+        f"  {'IP':>15}"
+        f"  {'ATTACK':<30}"
+        f"  {'PAYLOAD'}{C_RESET}"
+    )
+    print(f"  {C_DIM}{'─' * 90}{C_RESET}")
+
+
+def _logs_show(log_file):
+    """Display all existing logs with summary stats."""
+    with open(log_file, "r") as f:
+        lines = f.readlines()
+
+    if not lines:
+        print("[*] Log file is empty — no attacks detected yet.")
+        return
+
+    entries = []
+    for line in lines:
+        entry = _parse_log_line(line)
+        if entry:
+            entries.append(entry)
+
+    if not entries:
+        print("[*] Log file exists but no entries could be parsed.")
+        return
+
+    # --- Summary stats ---
+    unique_ips = set(e["ip"] for e in entries)
+    attack_counts = {}
+    for e in entries:
+        a = e["attack"]
+        attack_counts[a] = attack_counts.get(a, 0) + 1
+    top_attack = max(attack_counts, key=attack_counts.get) if attack_counts else "N/A"
+
+    print()
+    print(f"  {C_BOLD}Aegis WAF — Attack Log{C_RESET}")
+    print(f"  {C_DIM}{'─' * 40}{C_RESET}")
+    print(f"  Total attacks  : {C_BOLD}{len(entries)}{C_RESET}")
+    print(f"  Unique IPs     : {C_BOLD}{len(unique_ips)}{C_RESET}")
+    print(f"  Top attack     : {_color_attack(top_attack)}")
+    print()
+
+    # --- Show last N entries (default 50) or all ---
+    display_entries = entries[-50:] if len(entries) > 50 else entries
+    if len(entries) > 50:
+        print(f"  {C_DIM}(showing last 50 of {len(entries)} entries){C_RESET}")
+        print()
+
+    _print_header()
+    for entry in display_entries:
+        _print_log_entry(entry)
+
+    print()
+
+
+def _logs_follow(log_file):
+    """Continuously watch for new log entries in real-time."""
+    print()
+    print(f"  {C_BOLD}Aegis WAF — Live Attack Monitor{C_RESET}")
+    print(f"  {C_DIM}Watching for new attacks... (CTRL+C to stop){C_RESET}")
+    print()
+    _print_header()
+
+    count = 0
+    try:
         with open(log_file, "r") as f:
-            content = f.read().strip()
-            if content:
-                print(content)
-            else:
-                print("  (log file is empty — no attacks detected yet)")
+            # Jump to end of file — only show NEW entries
+            f.seek(0, 2)
+            while True:
+                line = f.readline()
+                if line:
+                    entry = _parse_log_line(line)
+                    if entry:
+                        count += 1
+                        _print_log_entry(entry)
+                else:
+                    time.sleep(0.3)
+    except KeyboardInterrupt:
+        print()
+        print(f"  {C_DIM}{'─' * 90}{C_RESET}")
+        print(f"  {C_BOLD}{count}{C_RESET} new attacks captured during this session.")
+        print()
 
 
 
@@ -341,7 +518,12 @@ def build_parser():
     logs_parser.add_argument(
         "--follow", "-f",
         action="store_true",
-        help="Continuously watch for new log entries (like tail -f)",
+        help="Continuously watch for new log entries in real-time",
+    )
+    logs_parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear all attack logs",
     )
     logs_parser.set_defaults(func=cmd_logs)
 
