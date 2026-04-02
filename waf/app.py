@@ -63,6 +63,8 @@ async def proxy(path: str, request: Request):
 
     # Forward to backend
     url = f"{BACKEND}/{path}" if path else BACKEND
+    if request.url.query:
+        url += "?" + request.url.query
 
     resp = requests.request(
         method=request.method,

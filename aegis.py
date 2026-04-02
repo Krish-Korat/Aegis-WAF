@@ -196,84 +196,6 @@ def clear_log_file(log_file):
 # COMMANDS
 # ───────────────────────────────────────────────────────────────────────
 
-def is_builtin_backend(target):
-    """Check if the target is the built-in test backend."""
-    return target in ("http://backend", "backend")
-
-
-def generate_compose(target, port, rate, detect_only):
-    """Generate docker-compose.yml dynamically based on target.
-
-    When using an external target (not the built-in backend):
-    - The 'backend' service is NOT started
-    - The WAF gets 'extra_hosts' so it can reach the host machine
-    - 'localhost' in the target URL is rewritten to 'host.docker.internal'
-    """
-    use_builtin = is_builtin_backend(target)
-
-    # Inside Docker, 'localhost' means the container itself, not the host.
-    # Rewrite localhost → host.docker.internal so WAF can reach the host.
-    docker_target = target
-    if not use_builtin:
-        docker_target = target.replace("localhost", "host.docker.internal") \
-                              .replace("127.0.0.1", "host.docker.internal")
-
-    lines = ["services:\n"]
-
-    # Only include the demo backend if user is NOT specifying an external target
-    if use_builtin:
-        lines.append("""
-  backend:
-    image: nginx:alpine
-    volumes:
-      - ./backend:/usr/share/nginx/html
-""")
-
-    # WAF service
-    waf_block = f"""
-  python_waf:
-    build: ./waf
-    container_name: python_waf"""
-
-    if use_builtin:
-        waf_block += """
-    depends_on:
-      - backend"""
-
-    waf_block += f"""
-    environment:
-      - BACKEND_URL={docker_target}
-      - RATE_LIMIT={rate}
-      - RATE_WINDOW=60
-      - DETECT_ONLY={"true" if detect_only else "false"}"""
-
-    # extra_hosts allows container to reach host machine's localhost
-    if not use_builtin:
-        waf_block += '\n    extra_hosts:\n      - "host.docker.internal:host-gateway"'
-
-    waf_block += """
-    volumes:
-      - ./waf/logs:/app/logs
-"""
-    lines.append(waf_block)
-
-    # Proxy
-    lines.append(f"""
-  proxy:
-    image: nginx
-    volumes:
-      - ./proxy/nginx.conf:/etc/nginx/nginx.conf
-    ports:
-      - "{port}:80"
-    depends_on:
-      - python_waf
-""")
-
-    compose_path = os.path.join(get_project_dir(), "docker-compose.yml")
-    with open(compose_path, "w") as f:
-        f.write("".join(lines))
-
-
 def cmd_start(args):
     target = validate_target(args.target)
     port = args.port
@@ -294,14 +216,18 @@ def cmd_start(args):
 
     ensure_docker_dns()
 
-    # Generate docker-compose.yml dynamically based on target
-    generate_compose(target, port, rate, detect_only)
+    env = os.environ.copy()
+    env["AEGIS_BACKEND_URL"] = target
+    env["AEGIS_PORT"] = str(port)
+    env["AEGIS_RATE_LIMIT"] = str(rate)
+    env["AEGIS_RATE_WINDOW"] = "60"
+    env["AEGIS_DETECT_ONLY"] = "true" if detect_only else "false"
 
     print(f"  {C}[*]{X} Building and starting containers...\n")
 
     result = subprocess.run(
-        docker_compose_cmd() + ["up", "--build", "-d"],
-        cwd=get_project_dir()
+        docker_compose_cmd() + ["up", "--build", "--force-recreate", "-d"],
+        cwd=get_project_dir(), env=env
     )
 
     if result.returncode != 0:

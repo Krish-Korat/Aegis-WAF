@@ -33,18 +33,11 @@ def normalize_input(text):
 
 # COMMAND INJECTION PATTERNS
 
-# command separators — semicolons can appear without spaces in attacks
+# Command separators typically used for injection
+# (We exclude single & to avoid false positives with URL query params)
 command_separators = re.compile(
-    r"""
-    ;                |    # semicolon (most common separator)
-    \|\|             |    # logical OR
-    \&\&                  # logical AND
-    """,
-    re.VERBOSE
+    r"(;|\|\||\&\&|\|)"
 )
-
-# single pipe (require spaces around it to avoid matching URL params)
-pipe_separator = re.compile(r"\s\|\s")
 
 # command substitution
 command_substitution = re.compile(
@@ -58,7 +51,7 @@ command_substitution = re.compile(
 # shell variable expansion / bypass tricks
 shell_expansion = re.compile(
     r"""
-    \$@ |                 # $@
+    \$@\s*\w |            # $@ followed by word char
     \$\{?ifs\}? |         # $IFS or ${IFS}
     \$\([^)]+\) |         # $(...)
     `[^`]+`               # backticks
@@ -66,13 +59,12 @@ shell_expansion = re.compile(
     re.VERBOSE
 )
 
-# common dangerous commands
+# Common dangerous commands used in an attack context
+# Bounded by \b to ensure we don't trigger on substring matches (e.g. 'tomcat')
 dangerous_commands = re.compile(
     r"""
     \b(
         cat|
-        ls|
-        id|
         whoami|
         uname|
         pwd|
@@ -84,15 +76,7 @@ dangerous_commands = re.compile(
         curl|
         wget|
         powershell|
-        cmd|
-        netcat|
-        rm|
-        chmod|
-        chown|
-        python|
-        perl|
-        ruby|
-        php
+        netcat
     )\b
     """,
     re.VERBOSE
@@ -102,15 +86,14 @@ dangerous_commands = re.compile(
 obfuscated_commands = re.compile(
     r"""
     w\s*ho[\$\@\{\(\)]+\s*am\s*i |
-    c\s*at |
-    l\s*s |
-    w\s*get |
-    c\s*url
+    c\s*a\s*t\s+\/     |
+    w\s*g\s*e\s*t\s+   |
+    c\s*u\s*r\s*l\s+
     """,
     re.VERBOSE
 )
 
-# sensitive file access
+# sensitive file access often used in command injection
 sensitive_files = re.compile(
     r"""
     /etc/passwd|
@@ -122,9 +105,13 @@ sensitive_files = re.compile(
     re.VERBOSE
 )
 
-# input/output redirection
+# input/output redirection (require context — not bare < > in HTML)
 redirection = re.compile(
-    r"(>|<)"
+    r"""
+    \b\w+\s*>>?\s*[/\w] |    # command > file  or  command >> file
+    \b\w+\s*<\s*[/\w]         # command < file
+    """,
+    re.VERBOSE
 )
 
 # hex encoded payloads
@@ -133,40 +120,20 @@ hex_encoding = re.compile(
 )
 
 
-# URL-like content detector — used to skip false positives
-url_pattern = re.compile(
-    r"^https?://[^\s]+$"
-)
-
-
-def is_mostly_url(text):
-    """Check if the normalized text is just a URL with query params.
-    Normal URLs contain & and = for parameters which can false-positive."""
-    # If the text is dominated by URL patterns, it's not an attack
-    # Count suspicious chars vs total
-    non_url = re.sub(r'https?://[^\s]+', '', text)
-    # If after removing URLs there's almost nothing left, skip
-    if len(non_url.strip()) < 5:
-        return True
-    return False
-
-
 # DETECTION
 
 def detect_cmd_injection(payload):
 
+    # For command injection, we primarily check if BOTH a separator AND a dangerous command exists.
+    # We do NOT flag on just a dangerous word alone because words like 'ping' or 'cat' are common.
+
     normalized = normalize_input(payload)
 
-    # Skip if the entire payload is just normal URL content
-    # This prevents false positives on URLs like google.com/async?param=value&other=value
-    if is_mostly_url(normalized):
-        return False
-
-    # direct command substitution — always suspicious
+    # 1. Direct command substitution — always suspicious
     if command_substitution.search(normalized):
         return True
 
-    # command chaining with separator (;, ||, &&)
+    # 2. Command chaining with separator
     if command_separators.search(normalized):
 
         if dangerous_commands.search(normalized):
@@ -178,31 +145,25 @@ def detect_cmd_injection(payload):
         if shell_expansion.search(normalized):
             return True
 
-    # pipe with spaces (   | command )
-    if pipe_separator.search(normalized):
-
-        if dangerous_commands.search(normalized):
-            return True
-
-    # shell expansion tricks
+    # 3. Shell expansion tricks
     if shell_expansion.search(normalized):
 
         if dangerous_commands.search(normalized) or obfuscated_commands.search(normalized):
             return True
 
-    # redirection attacks (only if combined with dangerous commands)
+    # 4. Redirection attacks
     if redirection.search(normalized):
 
-        if command_separators.search(normalized) and dangerous_commands.search(normalized):
+        if dangerous_commands.search(normalized):
             return True
 
-    # sensitive file access
+    # 5. Sensitive file access
     if sensitive_files.search(normalized):
 
         if dangerous_commands.search(normalized) or obfuscated_commands.search(normalized):
             return True
 
-    # hex encoded command tricks
+    # 6. Hex encoded command tricks
     if hex_encoding.search(normalized):
 
         if dangerous_commands.search(normalized):
