@@ -223,6 +223,18 @@ def cmd_start(args):
     env["AEGIS_RATE_WINDOW"] = "60"
     env["AEGIS_DETECT_ONLY"] = "true" if detect_only else "false"
 
+    # Write .env file to guarantee docker-compose picks up the variables
+    # even if subprocess environment inheritance drops them (e.g. sudo wrappers)
+    env_content = (
+        f"AEGIS_BACKEND_URL={target}\n"
+        f"AEGIS_PORT={port}\n"
+        f"AEGIS_RATE_LIMIT={rate}\n"
+        f"AEGIS_RATE_WINDOW=60\n"
+        f"AEGIS_DETECT_ONLY={'true' if detect_only else 'false'}\n"
+    )
+    with open(os.path.join(get_project_dir(), ".env"), "w") as f:
+        f.write(env_content)
+
     print(f"  {C}[*]{X} Building and starting containers...\n")
 
     result = subprocess.run(
