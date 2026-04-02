@@ -1,17 +1,10 @@
 services:
 
-  backend:
-    image: nginx:alpine
-    volumes:
-      - ./backend:/usr/share/nginx/html
-
   python_waf:
     build: ./waf
     container_name: python_waf
-    depends_on:
-      - backend
     environment:
-      - BACKEND_URL=${AEGIS_BACKEND_URL:-http://backend}
+      - BACKEND_URL=${AEGIS_BACKEND_URL}
       - RATE_LIMIT=${AEGIS_RATE_LIMIT:-30}
       - RATE_WINDOW=${AEGIS_RATE_WINDOW:-60}
       - DETECT_ONLY=${AEGIS_DETECT_ONLY:-false}

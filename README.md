@@ -229,7 +229,7 @@ python aegis.py start --target http://your-cloud-server-ip:3000 --port 80
 ```
 ┌──────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │   User   │ ──→ │    Nginx     │ ──→ │   Aegis WAF  │ ──→ │ Your Website │
-│ (Browser)│ ←── │  (Port 8000) │ ←── │   (FastAPI)  │ ←── │  (Backend)   │
+│ (Browser)│ ←── │  (Port 8000) │ ←── │   (FastAPI)  │ ←── │  (Your App)  │
 └──────────┘     └──────────────┘     └──────────────┘     └──────────────┘
                   Reverse Proxy        Rate Limiting         Your Application
                   X-Real-IP header     Attack Detection
@@ -245,10 +245,6 @@ Aegis-WAF/
 ├── aegis.py              ← CLI tool (start, stop, status, logs)
 ├── docker-compose.yml    ← Container configuration
 ├── README.md             ← This file
-│
-├── backend/              ← Test website (used for demo)
-│   └── index.html
-│
 ├── proxy/                ← Nginx reverse proxy config
 │   └── nginx.conf
 │

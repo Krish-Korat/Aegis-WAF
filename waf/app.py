@@ -8,7 +8,9 @@ import os
 
 app = FastAPI()
 
-BACKEND = os.environ.get("BACKEND_URL", "http://backend")
+BACKEND = os.environ.get("BACKEND_URL")
+if not BACKEND:
+    raise ValueError("BACKEND_URL environment variable is strictly required")
 DETECT_ONLY = os.environ.get("DETECT_ONLY", "false").lower() == "true"
 
 
