@@ -235,10 +235,16 @@ def cmd_start(args):
     with open(os.path.join(get_project_dir(), ".env"), "w") as f:
         f.write(env_content)
 
+    print(f"  {C}[*]{X} Cleaning up old instances to prevent ghosting...\n")
+    subprocess.run(
+        docker_compose_cmd() + ["down", "-v", "--remove-orphans"],
+        cwd=get_project_dir(), capture_output=True
+    )
+
     print(f"  {C}[*]{X} Building and starting containers...\n")
 
     result = subprocess.run(
-        docker_compose_cmd() + ["up", "--build", "--force-recreate", "-d"],
+        docker_compose_cmd() + ["up", "--build", "--force-recreate", "--remove-orphans", "-d"],
         cwd=get_project_dir(), env=env
     )
 
