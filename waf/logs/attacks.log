@@ -1,0 +1,46 @@
+[2026-04-10 17:50:22.315022] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:22.932568] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:23.656674] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:23.804686] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:23.957213] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:24.135444] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:24.252530] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:24.431723] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:24.561591] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:24.752466] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:24.981150] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:25.310082] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:25.455742] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:25.588436] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:25.703072] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:25.895553] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:50:26.015489] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>\n"}
+[2026-04-10 17:52:00.994913] IP: 172.18.0.1 | Attack: ['SQL Injection'] | Payload: http://localhost/auth{"username":"1234' or 1=1;--","password":"123456","action":"login"}
+[2026-04-10 18:01:57.991528] IP: 172.18.0.1 | Attack: ['LFI'] | Payload: http://localhost/etc/passwd
+[2026-04-10 18:02:35.241443] IP: 172.18.0.1 | Attack: ['LFI'] | Payload: http://localhost/etc/passwd
+[2026-04-10 18:03:13.385335] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":"|| whoami\n"}
+[2026-04-10 18:03:29.735248] IP: 172.18.0.1 | Attack: ['LFI', 'Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":"| cat /etc/passwd\n"}
+[2026-04-10 18:14:00.396376] IP: 172.18.0.1 | Attack: ['SSTI'] | Payload: http://localhost/posts{"author":"1234","text":"{{7*7}}"}
+[2026-04-10 18:14:37.763999] IP: 172.18.0.1 | Attack: ['SSTI'] | Payload: http://localhost/posts{"author":"1234","text":"{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}"}
+[2026-04-10 18:47:10.377524] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>"}
+[2026-04-10 18:47:13.033038] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>"}
+[2026-04-10 18:47:15.176944] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>"}
+[2026-04-10 18:47:15.343939] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>"}
+[2026-04-10 18:47:15.487759] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>"}
+[2026-04-10 18:47:15.883988] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>"}
+[2026-04-10 18:47:16.024027] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>"}
+[2026-04-10 18:48:36.591663] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>"}
+[2026-04-10 18:48:36.997502] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>"}
+[2026-04-10 18:48:37.148812] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>"}
+[2026-04-10 18:48:37.284159] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>"}
+[2026-04-10 18:48:37.405051] IP: 172.18.0.1 | Attack: ['XSS'] | Payload: http://localhost/posts{"author":"1234","text":"<script>alert(0)</script>"}
+[2026-04-10 18:49:59.253908] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":"|| whoami\n"}
+[2026-04-10 18:50:03.845671] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":"|| whoami\n"}
+[2026-04-10 18:50:03.998349] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":"|| whoami\n"}
+[2026-04-10 18:50:04.141263] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":"|| whoami\n"}
+[2026-04-10 18:53:18.163445] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":";ls"}
+[2026-04-10 18:53:26.019899] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":";ls"}
+[2026-04-10 18:53:33.213745] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":";whoami"}
+[2026-04-10 18:54:40.843941] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":";who$()am$i"}
+[2026-04-10 18:54:50.453443] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":";${IFS}who$()am$i"}
+[2026-04-10 18:55:27.948479] IP: 172.18.0.1 | Attack: ['Command Injection'] | Payload: http://localhost/posts{"author":"1234","text":";c''at${IFS}/etc/$()pas$()swd"}
